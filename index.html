@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>PEPPO SLOT</title>
+
+<style>
+body{
+  margin:0;
+  background: radial-gradient(circle,#1a0000,#000);
+  color:white;
+  font-family:Arial;
+  text-align:center;
+}
+
+h1{
+  color:red;
+  font-size:55px;
+  text-shadow:0 0 20px red;
+}
+
+button{
+  padding:10px 15px;
+  margin:5px;
+  background:red;
+  border:none;
+  color:white;
+  cursor:pointer;
+  border-radius:8px;
+}
+
+input{
+  padding:10px;
+  margin:5px;
+}
+
+#slot{
+  font-size:60px;
+  margin:20px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>PEPPO 🎰</h1>
+
+<!-- AUTH -->
+<div id="authBox">
+  <input id="nick" placeholder="Nickname"><br>
+  <input id="pass" type="password" placeholder="Password"><br>
+
+  <button onclick="register()">REGISTRA</button>
+  <button onclick="login()">ACCEDI</button>
+</div>
+
+<!-- GAME -->
+<div id="gameBox" style="display:none;">
+
+  <h3 id="credits"></h3>
+  <h3 id="level"></h3>
+
+  <div id="slot">❓ ❓ ❓</div>
+
+  <button onclick="spin()">SPIN 🎰</button>
+
+  <div>
+    <button onclick="buyLuck()">Luck + (500)</button>
+    <button onclick="buyBonus()">Bonus + (1000)</button>
+  </div>
+
+  <div>
+    <input id="code" placeholder="Codice segreto">
+    <button onclick="useCode()">🎁 Usa codice</button>
+  </div>
+
+  <div>
+    <button onclick="logout()">🏠 Logout</button>
+  </div>
+
+  <h3>Classifica</h3>
+  <div id="rank"></div>
+
+</div>
+
+<script>
+
+// DATABASE
+let users = JSON.parse(localStorage.getItem("peppo_users") || "{}");
+let currentUser = null;
+
+let symbols = ["🍒","🍋","💎","7️⃣","⭐"];
+
+// 🔊 SUONO
+let audioCtx;
+
+function playSound(){
+  if(!audioCtx){
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+
+  let osc = audioCtx.createOscillator();
+  let gain = audioCtx.createGain();
+
+  osc.type = "square";
+  osc.frequency.setValueAtTime(200, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(700, audioCtx.currentTime + 0.3);
+
+  gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+
+  osc.start();
+  osc.stop(audioCtx.currentTime + 0.3);
+}
+
+// REGISTRA
+function register(){
+  let n = nick.value;
+  let p = pass.value;
+
+  if(!n || !p) return alert("Compila tutto");
+
+  if(users[n]){
+    alert("Utente esiste già");
+    return;
+  }
+
+  users[n] = {
+    password:p,
+    credits:1000,
+    level:1,
+    xp:0,
+    luck:1,
+    bonus:1,
+    usedCodes:{}
+  };
+
+  save();
+  alert("Registrato! Ora accedi");
+}
+
+// LOGIN
+function login(){
+  let n = nick.value;
+  let p = pass.value;
+
+  if(!users[n] || users[n].password !== p){
+    alert("Credenziali errate");
+    return;
+  }
+
+  currentUser = n;
+
+  authBox.style.display="none";
+  gameBox.style.display="block";
+
+  update();
+}
+
+// LOGOUT
+function logout(){
+  currentUser=null;
+  authBox.style.display="block";
+  gameBox.style.display="none";
+}
+
+// SAVE
+function save(){
+  localStorage.setItem("peppo_users", JSON.stringify(users));
+}
+
+// 🎰 SLOT
+function spin(){
+  playSound();
+
+  let u = users[currentUser];
+  if(!u) return;
+
+  if(u.credits < 10){
+    alert("Crediti insufficienti");
+    return;
+  }
+
+  u.credits -= 10;
+
+  let interval = setInterval(()=>{
+    slot.innerText =
+      symbols[Math.floor(Math.random()*symbols.length)] + " " +
+      symbols[Math.floor(Math.random()*symbols.length)] + " " +
+      symbols[Math.floor(Math.random()*symbols.length)];
+  },80);
+
+  setTimeout(()=>{
+
+    clearInterval(interval);
+
+    let r = [
+      symbols[Math.floor(Math.random()*symbols.length)],
+      symbols[Math.floor(Math.random()*symbols.length)],
+      symbols[Math.floor(Math.random()*symbols.length)]
+    ];
+
+    slot.innerText = r.join(" ");
+
+    let win = 0;
+
+    if(r[0]===r[1] && r[1]===r[2]){
+      win = 200 * u.bonus;
+
+      if(Math.random() < 0.05 * u.luck){
+        win += 5000;
+        alert("💰 JACKPOT!");
+      }
+    }
+
+    u.credits += win;
+    u.xp += win ? 50 : 10;
+
+    if(u.xp >= 100){
+      u.level++;
+      u.xp = 0;
+      u.credits += 300;
+      alert("LEVEL UP!");
+    }
+
+    save();
+    update();
+
+  },1000);
+}
+
+// SHOP
+function buyLuck(){
+  let u = users[currentUser];
+  if(u.credits >= 500){
+    u.credits -= 500;
+    u.luck += 0.1;
+  }
+  save(); update();
+}
+
+function buyBonus(){
+  let u = users[currentUser];
+  if(u.credits >= 1000){
+    u.credits -= 1000;
+    u.bonus += 0.5;
+  }
+  save(); update();
+}
+
+// CODICI SEGRETI
+function useCode(){
+  let u = users[currentUser];
+  let c = code.value.trim();
+
+  let rewards = {
+    "pippo13": 1000000,
+    "peppino": 10000,
+    "tamy92": 1000000000,
+    "nicoiolepeppe": "100000000000000000000000000000"
+  };
+
+  if(!rewards[c]){
+    alert("Codice errato");
+    return;
+  }
+
+  if(u.usedCodes[c]){
+    alert("Già usato");
+    return;
+  }
+
+  let reward = rewards[c];
+
+  if(typeof reward === "string"){
+    u.credits = (BigInt(u.credits) + BigInt(reward)).toString();
+  } else {
+    u.credits += reward;
+  }
+
+  u.usedCodes[c] = true;
+
+  save();
+  update();
+}
+
+// UI
+function update(){
+  let u = users[currentUser];
+
+  credits.innerText = "💰 Crediti: " + u.credits.toString();
+  level.innerText = "⭐ Livello: " + u.level;
+
+  let sorted = Object.entries(users)
+    .sort((a,b)=>b[1].credits - a[1].credits);
+
+  rank.innerHTML = sorted.map((x,i)=>
+    `${i+1}. ${x[0]} - ${x[1].credits}`
+  ).join("<br>");
+}
+
+</script>
+
+</body>
+</html>
